@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BETA!</title>
+    
+    <!-- 1. Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Chessboard-js CSS (for the UI) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    
+    <!-- 3. Custom Styles -->
+    <style>
+        /* Use Inter font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Style for highlighting legal move squares */
+        .highlight-legal {
+            background-color: rgba(255, 255, 0, 0.4);
+        }
+        
+        /* Style for highlighting the last move */
+        .highlight-last-move {
+            background-color: rgba(150, 250, 150, 0.5);
+        }
+
+        /* Ensure the board is responsive */
+        /* We will control the width via its container */
+        #board {
+            width: 100%;
+            /* aspect-ratio: 1 / 1; (chessboard-js handles this) */
+        }
+        
+        /* Custom styles for buttons */
+        .btn {
+            @apply w-full px-4 py-3 rounded-lg text-white font-semibold shadow-md transition-all duration-200 ease-in-out;
+        }
+        .btn-primary {
+            @apply bg-blue-600 hover:bg-blue-700;
+        }
+        .btn-secondary {
+            @apply bg-gray-600 hover:bg-gray-700;
+        }
+        .btn-success {
+            @apply bg-green-600 hover:bg-green-700;
+        }
+        .btn-danger {
+            @apply bg-red-600 hover:bg-red-700;
+        }
+        
+        /* Custom styles for input */
+        .input-field {
+            @apply w-full px-4 py-3 rounded-lg bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500;
+        }
+
+        /* --- Styles for HTML Symbol Pieces --- */
+        
+        /* 1. Hide the default <img> tag provided by chessboard-js */
+        #board .piece-417db {
+            visibility: hidden; /* Hides the img but keeps its space */
+        }
+
+        /* 2. Target the parent square using :has() based on the child img's data-piece */
+        /* These selectors add the unicode symbol to the square */
+        .square-55d63:has(img[data-piece="wP"])::before { content: '\2659'; } /* ♙ */
+        .square-55d63:has(img[data-piece="wN"])::before { content: '\2658'; } /* ♘ */
+        .square-55d63:has(img[data-piece="wB"])::before { content: '\2657'; } /* ♗ */
+        .square-55d63:has(img[data-piece="wR"])::before { content: '\2656'; } /* ♖ */
+        .square-55d63:has(img[data-piece="wQ"])::before { content: '\2655'; } /* ♕ */
+        .square-55d63:has(img[data-piece="wK"])::before { content: '\2654'; } /* ♔ */
+
+        .square-55d63:has(img[data-piece="bP"])::before { content: '\265F'; } /* ♟ */
+        .square-55d63:has(img[data-piece="bN"])::before { content: '\265E'; } /* ♞ */
+        .square-55d63:has(img[data-piece="bB"])::before { content: '\265D'; } /* ♝ */
+        .square-55d63:has(img[data-piece="bR"])::before { content: '\265C'; } /* ♜ */
+        .square-55d63:has(img[data-piece="bQ"])::before { content: '\265B'; } /* ♛ */
+        .square-55d63:has(img[data-piece="bK"])::before { content: '\265A'; } /* ♚ */
+
+        /* 3. Style the ::before pseudo-element to center the symbol */
+        .square-55d63::before {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 44px; /* You can adjust this size */
+            line-height: 1;
+            z-index: 1; /* Place it above the hidden img */
+        }
+
+        /* 4. Color the pieces */
+        .square-55d63:has(img[data-piece^="w"])::before {
+            color: #8B4513; /* White pieces (Dark Brown) */
+        }
+        .square-55d63:has(img[data-piece^="b"])::before {
+            color: #333; /* Black pieces (dark gray) */
+        }
+        /* --- End HTML Symbol Styles --- */
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Game Container -->
+    <div class="w-full max-w-6xl mx-auto">
+        <h1 class="text-3xl lg:text-4xl font-bold text-center mb-6">Chess Game</h1>
+
+        <!-- Layout: Board on left/top, Controls on right/bottom -->
+        <div class="flex flex-col lg:flex-row gap-6 lg:gap-8">
+
+            <!-- Left Side: Board and Status -->
+            <div class="lg:w-2/3">
+                <!-- Board Container: This controls the board's max size -->
+                <div id="board-container" class="w-full max-w-lg mx-auto lg:mx-0 shadow-2xl rounded-lg overflow-hidden">
+                    <!-- The board will be injected here by chessboard-js -->
+                    <div id="board"></div>
+                </div>
+                
+                <!-- Status Panel -->
+                <div id="status-panel" class="bg-gray-800 p-4 rounded-lg shadow-lg mt-4 text-center">
+                    <div id="status" class="text-lg font-medium">Select a game mode to start.</div>
+                </div>
+            </div>
+
+            <!-- Right Side: Controls -->
+            <div class="lg:w-1/3">
+                <div id="controls-panel" class="bg-gray-800 p-6 rounded-lg shadow-lg space-y-6">
+
+                    <!-- Mode Selection (Initially visible) -->
+                    <div id="mode-selection" class="space-y-4"> <!-- NOT HIDDEN -->
+                        <h2 class="text-xl font-semibold text-center">Game Mode</h2>
+                        <button id="vs-ai-btn" class="btn btn-primary">Play vs. AI</button> <br>
+                        <button id="vs-online-btn" class="btn btn-success">Play vs. Player (Online)</button>
+                    </div>
+
+                    <!-- AI Panel (Initially hidden) -->
+                    <div id="ai-panel" class="hidden space-y-4">
+                        <h2 class="text-xl font-semibold text-center">AI Game</h2>
+                        <button id="play-white-btn" class="btn btn-secondary">Play as White</button><br>
+                        <button id="play-black-btn" class="btn btn-secondary">Play as Black</button><br>
+                        <button id="reset-ai-btn" class="btn btn-danger">Reset Game</button><br>
+                        <button id="back-to-mode-btn-ai" class="btn btn-secondary">Back to Menu</button><br>
+                    </div>
+
+                    <!-- Online Panel (Initially hidden) -->
+                    <div id="online-panel" class="hidden space-y-4"> <!-- HIDDEN AGAIN -->
+                        <h2 class="text-xl font-semibold text-center">Online Multiplayer</h2>
+                        <div class="text-center p-3 bg-gray-700 rounded-lg">
+                            Your User ID: <br>
+                            <span id="user-id" class="font-mono text-sm break-all">Connecting...</span>
+                        </div>
+                        
+                        <div>
+                            <label for="room-id-input" class="block text-sm font-medium mb-2">Room ID:</label>
+                            <input type="text" id="room-id-input" class="input-field" placeholder="Enter Room ID or leave blank to create">
+                        </div>
+                        
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <button id="create-room-btn" class="btn btn-success flex-1">Create Room</button>
+                            <button id="join-room-btn" class="btn btn-primary flex-1">Join Room</button>
+                        </div>
+                        
+                        <div id="room-info" class="hidden text-center p-3 bg-gray-700 rounded-lg">
+                            Current Room: <span id="room-id-display" class="font-bold font-mono"></span>
+                        </div>
+                        
+                        <button id="back-to-mode-btn-online" class="btn btn-secondary">Back to Menu</button> <!-- RE-ADDED -->
+                    </div>
+
+                    <!-- Message Area -->
+                    <div id="message-area" class="mt-4 text-yellow-400 text-center h-10"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 1. jQuery (required by chessboard-js) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    
+    <!-- 2. Chess.js (the game logic) -->
+    <!-- Using the 0.10.3 version for stability with chessboard-js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    
+    <!-- 3. Chessboard-js (the UI) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+    <!-- 4. Firebase SDKs -->
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            updateDoc, 
+            onSnapshot, 
+            setLogLevel 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Global Variables ---
+        
+        // Firebase
+        let db, auth, userId;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-chess-app';
+        let currentRoomId = null;
+        let unsubscribeGame = null;
+
+        // Chess Game
+        let board = null;         // The chessboard-js UI instance
+        let game = new Chess();   // The chess.js logic instance
+        let myColor = 'w';        // Player's color ('w' or 'b')
+        let gameMode = null;      // 'ai' or 'online' <-- SET TO NULL BY DEFAULT
+        let sourceSquare = null;  // Stores the first square clicked
+        
+        // Piece square highlighting
+        let whiteSquareGrey = '#a9a9a9';
+        let blackSquareGrey = '#696969';
+        
+        // DOM Elements
+        const statusEl = document.getElementById('status');
+        const boardEl = document.getElementById('board');
+        const messageEl = document.getElementById('message-area');
+        
+        // Panels
+        const modeSelectionPanel = document.getElementById('mode-selection'); // RE-ADDED
+        const aiPanel = document.getElementById('ai-panel'); // RE-ADDED
+        const onlinePanel = document.getElementById('online-panel');
+        
+        // Buttons
+        const vsAiBtn = document.getElementById('vs-ai-btn'); // RE-ADDED
+        const vsOnlineBtn = document.getElementById('vs-online-btn'); // RE-ADDED
+        const playWhiteBtn = document.getElementById('play-white-btn'); // RE-ADDED
+        const playBlackBtn = document.getElementById('play-black-btn'); // RE-ADDED
+        const resetAiBtn = document.getElementById('reset-ai-btn'); // RE-ADDED
+        const createRoomBtn = document.getElementById('create-room-btn');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+        const backToModeBtnAi = document.getElementById('back-to-mode-btn-ai'); // RE-ADDED
+        const backToModeBtnOnline = document.getElementById('back-to-mode-btn-online'); // RE-ADDED
+
+        // Online UI
+        const userIdEl = document.getElementById('user-id');
+        const roomIdInput = document.getElementById('room-id-input');
+        const roomInfoEl = document.getElementById('room-info');
+        const roomIdDisplay = document.getElementById('room-id-display');
+
+        // --- Utility Functions ---
+
+        function showMessage(msg) {
+            messageEl.textContent = msg;
+            // Clear message after 4 seconds
+            setTimeout(() => {
+                if (messageEl.textContent === msg) {
+                    messageEl.textContent = '';
+                }
+            }, 4000);
+        }
+
+        function removeGreySquares () {
+            $('#board .square-55d63').css('background', '')
+        }
+
+        function greySquare (square) {
+            let $square = $('#board .square-' + square)
+            
+            let background = whiteSquareGrey
+            if ($square.hasClass('black-3c85d')) {
+                background = blackSquareGrey
+            }
+            
+            $square.css('background', background)
+        }
+        
+        function highlightLastMove(from, to) {
+            $('#board .square-55d63').removeClass('highlight-last-move');
+            $('#board .square-' + from).addClass('highlight-last-move');
+            $('#board .square-' + to).addClass('highlight-last-move');
+        }
+
+        // --- RE-ADDED Chess AI Logic ---
+        
+        // Piece values for evaluation
+        const pieceValues = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
+
+        // Evaluate the board based on material
+        function evaluateBoard(board) {
+            let totalEvaluation = 0;
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    let piece = board[i][j];
+                    if (piece) {
+                        let value = pieceValues[piece.type];
+                        totalEvaluation += (piece.color === 'w') ? value : -value;
+                    }
+                }
+            }
+            return totalEvaluation;
+        }
+
+        // Minimax algorithm with alpha-beta pruning
+        function minimax(gameInstance, depth, alpha, beta, isMaximizingPlayer) {
+            if (depth === 0) {
+                return evaluateBoard(gameInstance.board());
+            }
+
+            let newGameMoves = gameInstance.moves();
+
+            if (isMaximizingPlayer) {
+                let bestVal = -Infinity;
+                for (let i = 0; i < newGameMoves.length; i++) {
+                    gameInstance.move(newGameMoves[i]);
+                    bestVal = Math.max(bestVal, minimax(gameInstance, depth - 1, alpha, beta, !isMaximizingPlayer));
+                    gameInstance.undo();
+                    alpha = Math.max(alpha, bestVal);
+                    if (beta <= alpha) {
+                        break;
+                    }
+                }
+                return bestVal;
+            } else {
+                let bestVal = Infinity;
+                for (let i = 0; i < newGameMoves.length; i++) {
+                    gameInstance.move(newGameMoves[i]);
+                    bestVal = Math.min(bestVal, minimax(gameInstance, depth - 1, alpha, beta, !isMaximizingPlayer));
+                    gameInstance.undo();
+                    beta = Math.min(beta, bestVal);
+                    if (beta <= alpha) {
+                        break;
+                    }
+                }
+                return bestVal;
+            }
+        }
+
+        // Find the best move for the AI
+        function getAIBestMove(gameInstance) {
+            if (gameInstance.game_over()) return null;
+
+            let bestVal = -Infinity;
+            let bestMove = null;
+            let newGameMoves = gameInstance.moves();
+            
+            // Randomize move order for variety
+            newGameMoves.sort(() => 0.5 - Math.random());
+
+            for (let i = 0; i < newGameMoves.length; i++) {
+                let newMove = newGameMoves[i];
+                gameInstance.move(newMove);
+                
+                // We are the maximizing player (AI), so the next turn is minimizing (Human)
+                // Search depth 3 (2 + 1) is a decent balance of speed and strength
+                let value = minimax(gameInstance, 2, -Infinity, Infinity, false);
+                
+                gameInstance.undo();
+
+                if (value > bestVal) {
+                    bestVal = value;
+                    bestMove = newMove;
+                }
+            }
+            return bestMove;
+        }
+        
+        // Make the AI's move on the board
+        function makeAIMove() {
+            if (game.game_over()) return;
+            
+            // Show AI is "thinking"
+            statusEl.textContent = "AI is thinking...";
+            
+            // Use setTimeout to prevent UI freezing
+            setTimeout(() => {
+                const move = getAIBestMove(game);
+                if (move) {
+                    game.move(move);
+                    board.position(game.fen());
+                    highlightLastMove(move.from, move.to);
+                    updateStatus();
+                }
+            }, 250); // 250ms delay
+        }
+        
+        // --- Chessboard-js Event Handlers ---
+
+        // Helper function to check if the piece belongs to the current player
+        function isMyPiece(piece) {
+            if (gameMode === 'ai') {
+                if ((myColor === 'w' && piece.search(/^b/) !== -1) ||
+                    (myColor === 'b' && piece.search(/^w/) !== -1) ||
+                    (game.turn() !== myColor)) {
+                    return false; // Not our piece
+                }
+            } else if (gameMode === 'online') {
+                if (!currentRoomId) return false;
+                if ((myColor === 'w' && piece.search(/^b/) !== -1) ||
+                    (myColor === 'b' && piece.search(/^w/) !== -1) ||
+                    (game.turn() !== myColor)) {
+                    return false; // Not our piece
+                }
+            } else {
+                return false; // No game mode
+            }
+            return true; // It's a movable piece
+        }
+
+        // --- NEW CLICK-TO-MOVE LOGIC ---
+        function onSquareClick(square, piece) {
+            // --- Second Click (Making a Move) ---
+            if (sourceSquare) {
+                removeGreySquares(); // Always remove highlights on second click
+
+                // Try to make the move
+                let move = game.move({
+                    from: sourceSquare,
+                    to: square,
+                    promotion: 'q' // NOTE: always promote to a queen for simplicity
+                });
+
+                // Reset source square
+                sourceSquare = null;
+
+                // If move is illegal, do nothing (user might have mis-clicked)
+                if (move === null) return;
+
+                // --- Move was LEGAL ---
+                highlightLastMove(move.from, move.to);
+                board.position(game.fen()); // Manually update the board position
+                updateStatus();
+
+                // Handle game flow based on mode
+                if (gameMode === 'ai') {
+                    // AI's turn
+                    if (!game.game_over()) {
+                        window.setTimeout(makeAIMove, 250);
+                    }
+                } else if (gameMode === 'online') {
+                    // Update Firebase
+                    updateFirebaseGame();
+                }
+                
+                return; // End of second click logic
+            }
+
+            // --- First Click (Selecting a Piece) ---
+            
+            // Do nothing if game is over or no piece was clicked
+            if (game.game_over() || !piece) {
+                removeGreySquares();
+                sourceSquare = null;
+                return;
+            }
+
+            // Check if it's the player's piece
+            if (!isMyPiece(piece)) return;
+
+            // Get legal moves
+            let moves = game.moves({
+                square: square,
+                verbose: true
+            });
+
+            // If no moves, do nothing
+            if (moves.length === 0) return;
+
+            // --- This is a VALID first click ---
+            sourceSquare = square;
+
+            // Show "color guidelines"
+            greySquare(square); // Highlight the source square
+            for (let i = 0; i < moves.length; i++) {
+                greySquare(moves[i].to); // Highlight all destination squares
+            }
+        }
+        
+        // --- REMOVED onDragStart, onDrop, onSnapEnd ---
+        
+        function onMouseoverSquare (square, piece) {
+            // Removed hover logic to avoid conflict with click logic
+        }
+
+        function onMouseoutSquare (square, piece) {
+            // Removed hover logic to avoid conflict with click logic
+        }
+
+        // Update the board position after the piece snap
+        // for castling, en passant, pawn promotion
+        // function onSnapEnd() {
+        //     board.position(game.fen());
+        // }
+        
+        // --- Game State & UI Update Functions ---
+        
+        function updateStatus() {
+            let statusText = '';
+            let moveColor = (game.turn() === 'w') ? 'White' : 'Black';
+
+            if (game.in_checkmate()) { // <-- FIX
+                statusText = `Checkmate! ${moveColor === 'White' ? 'Black' : 'White'} wins.`;
+            } else if (game.in_draw()) { // <-- FIX
+                statusText = 'Game over: Draw';
+            } else {
+                statusText = `${moveColor}'s turn.`;
+                if (game.in_check()) {
+                    statusText += ` ${moveColor} is in check!`;
+                }
+            }
+            statusEl.textContent = statusText;
+        }
+
+        function resetGame() {
+            game.reset();
+            board.position('start');
+            updateStatus();
+            
+            if (gameMode === 'online') { // RE-ADDED THIS CHECK
+                resetOnlineState();
+            } else if (gameMode === 'ai') { // RE-ADDED THIS BLOCK
+                if (myColor === 'b') {
+                    // If player is Black, AI (White) moves first
+                    window.setTimeout(makeAIMove, 250);
+                }
+            }
+        }
+
+        // --- Firebase & Online Multiplayer Logic ---
+
+        function getGameRef(roomId) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'chess-games', roomId);
+        }
+        
+        // Listen for changes to the game document in Firestore
+        function listenToGame(roomId) {
+            if (unsubscribeGame) {
+                unsubscribeGame(); // Stop listening to previous game
+            }
+            
+            const docRef = getGameRef(roomId);
+            unsubscribeGame = onSnapshot(docRef, (doc) => {
+                if (!doc.exists()) {
+                    showMessage("Game room was deleted.");
+                    resetOnlineState();
+                    return;
+                }
+                
+                const gameData = doc.data();
+                
+                // Load game state if it's different from local
+                if (gameData.fen && gameData.fen !== game.fen()) {
+                    game.load(gameData.fen);
+                    board.position(gameData.fen);
+                    
+                    // Highlight opponent's last move
+                    if(gameData.lastMove) {
+                        highlightLastMove(gameData.lastMove.from, gameData.lastMove.to);
+                    }
+                    
+                    updateStatus();
+                    showMessage("Your turn!");
+                }
+                
+                // Handle opponent joining
+                if (myColor === 'w' && gameData.status === 'waiting' && gameData.playerBlack) {
+                     showMessage("Opponent joined! Game started.");
+                } else if (myColor === 'w' && gameData.status === 'waiting') {
+                     showMessage("Waiting for opponent to join...");
+                }
+            });
+        }
+        
+        // Update the game document in Firestore with the new move
+        async function updateFirebaseGame() {
+            if (!currentRoomId) return;
+
+            const docRef = getGameRef(currentRoomId);
+            const lastMove = game.history({ verbose: true }).pop();
+            
+            try {
+                await updateDoc(docRef, {
+                    fen: game.fen(),
+                    turn: game.turn(),
+                    status: game.game_over() ? 'over' : 'active', // <-- FIX
+                    lastMove: lastMove ? { from: lastMove.from, to: lastMove.to } : null
+                });
+            } catch (error) {
+                console.error("Error updating game:", error);
+                showMessage("Error syncing move. Please check connection.");
+            }
+        }
+
+        // Reset online game state and UI
+        function resetOnlineState() {
+            if (unsubscribeGame) {
+                unsubscribeGame();
+                unsubscribeGame = null;
+            }
+            currentRoomId = null;
+            myColor = 'w';
+            roomIdInput.value = '';
+            roomIdInput.disabled = false;
+            createRoomBtn.disabled = false;
+            joinRoomBtn.disabled = false;
+            roomInfoEl.classList.add('hidden');
+            roomIdDisplay.textContent = '';
+            game.reset();
+            board.position('start');
+            updateStatus();
+        }
+
+        // --- Event Listeners for UI ---
+
+        // Mode Selection
+        vsAiBtn.addEventListener('click', () => { // RE-ADDED
+            gameMode = 'ai';
+            modeSelectionPanel.classList.add('hidden');
+            aiPanel.classList.remove('hidden');
+            onlinePanel.classList.add('hidden');
+            myColor = 'w'; // Default to white
+            resetGame();
+        });
+
+        vsOnlineBtn.addEventListener('click', () => { // RE-ADDED
+            if (!userId) {
+                showMessage("Connecting to server... please wait.");
+                return;
+            }
+            gameMode = 'online';
+            modeSelectionPanel.classList.add('hidden');
+            aiPanel.classList.add('hidden');
+            onlinePanel.classList.remove('hidden');
+            resetGame();
+        });
+        
+        // Back to Menu Buttons
+        backToModeBtnAi.addEventListener('click', () => { // RE-ADDED
+            gameMode = null;
+            modeSelectionPanel.classList.remove('hidden');
+            aiPanel.classList.add('hidden');
+            onlinePanel.classList.add('hidden');
+            resetGame();
+        });
+        
+        backToModeBtnOnline.addEventListener('click', () => { // RE-ADDED
+            gameMode = null;
+            modeSelectionPanel.classList.remove('hidden');
+            aiPanel.classList.add('hidden');
+ax
+            onlinePanel.classList.add('hidden');
+            resetGame(); // This will also reset online state
+        });
+        
+
+        // AI Panel
+        playWhiteBtn.addEventListener('click', () => { // RE-ADDED
+            myColor = 'w';
+            board.orientation('white');
+            resetGame();
+        });
+
+        playBlackBtn.addEventListener('click', () => { // RE-ADDED
+            myColor = 'b';
+            board.orientation('black');
+            resetGame(); // resetGame will auto-make AI's first move
+        });
+
+        resetAiBtn.addEventListener('click', () => { // RE-ADDED
+            resetGame();
+        });
+        
+
+        // Online Panel
+        createRoomBtn.addEventListener('click', async () => {
+            let roomId = roomIdInput.value.trim().toUpperCase();
+            if (!roomId) {
+                // Generate a random 6-char ID
+                roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            }
+            
+            const docRef = getGameRef(roomId);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                showMessage("Room ID already exists. Try another.");
+                return;
+            }
+
+            showMessage("Creating room...");
+            currentRoomId = roomId;
+            myColor = 'w';
+            board.orientation('white');
+            game.reset();
+            
+            const initialGameData = {
+                fen: game.fen(),
+                playerWhite: userId,
+                playerBlack: null,
+                status: 'waiting', // 'waiting', 'active', 'over'
+                turn: 'w',
+                createdAt: new Date().toISOString(),
+                lastMove: null
+            };
+
+            try {
+                await setDoc(docRef, initialGameData);
+                
+                roomIdInput.value = roomId;
+                roomIdInput.disabled = true;
+                createRoomBtn.disabled = true;
+                joinRoomBtn.disabled = true;
+                
+                roomInfoEl.classList.remove('hidden');
+                roomIdDisplay.textContent = roomId;
+                
+                listenToGame(roomId);
+                showMessage("Room created! Waiting for opponent...");
+                
+            } catch (error) {
+                console.error("Error creating room:", error);
+                showMessage("Failed to create room.");
+                currentRoomId = null;
+            }
+        });
+
+        joinRoomBtn.addEventListener('click', async () => {
+            const roomId = roomIdInput.value.trim().toUpperCase();
+            if (!roomId) {
+                showMessage("Please enter a Room ID to join.");
+                return;
+            }
+            
+            const docRef = getGameRef(roomId);
+            
+            try {
+                const docSnap = await getDoc(docRef);
+                
+                if (!docSnap.exists()) {
+                    showMessage("Room not found.");
+                    return;
+                }
+                
+                const gameData = docSnap.data();
+
+                if (gameData.playerBlack && gameData.playerBlack !== userId) {
+                    showMessage("This room is full.");
+                    return;
+                }
+                
+                if (gameData.playerWhite === userId) {
+                    showMessage("You are already in this room as White.");
+                    // Re-join logic
+                } else {
+                    showMessage("Joining room as Black...");
+                    await updateDoc(docRef, {
+                        playerBlack: userId,
+                        status: 'active'
+                    });
+                }
+                
+                currentRoomId = roomId;
+                myColor = 'b';
+                board.orientation('black');
+                
+                // Load the state from Firebase
+                game.load(gameData.fen);
+                board.position(gameData.fen);
+                updateStatus();
+
+                roomIdInput.disabled = true;
+                createRoomBtn.disabled = true;
+                joinRoomBtn.disabled = true;
+                
+                roomInfoEl.classList.remove('hidden');
+                roomIdDisplay.textContent = roomId;
+
+                listenToGame(roomId);
+                
+            } catch (error) {
+                console.error("Error joining room:", error);
+                showMessage("Failed to join room.");
+            }
+        });
+
+
+        // --- Initialization ---
+
+        async function initFirebase() {
+            try {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('debug');
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdEl.textContent = userId;
+                    } else {
+                        // No user, sign in
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined') {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (authError) {
+                            console.error("Firebase Auth Error:", authError);
+                            userIdEl.textContent = "Auth Error";
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error("Firebase init error:", e);
+                userIdEl.textContent = "Firebase Error";
+            }
+        }
+
+        function initGame() {
+            // Config for chessboard-js
+            const config = {
+                draggable: false, // <-- CHANGED: Disable dragging
+                position: 'start',
+                // --- REMOVED ---
+                // onDragStart: onDragStart,
+                // onDrop: onDrop,
+                // onSnapEnd: onSnapEnd,
+                // onMouseoutSquare: onMouseoutSquare,
+                // onMouseoverSquare: onMouseoverSquare,
+                // --- ADDED ---
+                onSquareClick: onSquareClick,
+                
+                pieceTheme: ' ' // Use a blank/invalid path to hide default images
+            };
+            
+            // Initialize the board
+            board = Chessboard('board', config);
+            
+            // Make the board responsive
+            $(window).resize(board.resize);
+            
+            // Update the status
+            updateStatus();
+        }
+
+        // --- Start the App ---
+        initFirebase();
+        initGame();
+
+    </script>
+</body>
+</html>
